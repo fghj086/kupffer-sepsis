@@ -1,0 +1,85 @@
+# Stage 01 — stimulus-response signatures from GSE200210 (mouse BMDM, 24 h stimulation)
+seed: 20261124
+stage: 01_perturbation
+
+data:
+  counts: data/raw/GSE200210/GSE200210_Raw_count_BMDM.txt.gz
+  series_matrix: data/raw/GSE200210/GSE200210_series_matrix.txt.gz
+  # Gene annotation: Ensembl release 102 (GRCm38, the assembly used by the depositors),
+  # gene records parsed from Mus_musculus.GRCm38.102.gtf.gz (ftp.ebi.ac.uk/pub/ensembl/release-102)
+  gene_map: data/raw/GSE200210/annotation/ens102_mouse_genes.tsv
+  # MSigDB 2024.1.Mm mouse-native collections (data.broadinstitute.org/gsea-msigdb/msigdb/release/2024.1.Mm)
+  gmt:
+    hallmark: data/raw/GSE200210/annotation/mh.all.v2024.1.Mm.symbols.gmt
+    go_bp: data/raw/GSE200210/annotation/m5.go.bp.v2024.1.Mm.symbols.gmt
+    reactome: data/raw/GSE200210/annotation/m2.cp.reactome.v2024.1.Mm.symbols.gmt
+  msigdb_version: "2024.1.Mm"
+
+# GEO sample description -> condition label used throughout
+conditions:
+  PBS: PBS
+  frHMGB1: frHMGB1
+  dsHMGB1: dsHMGB1
+  LPS: LPS
+  M1: LPS_IFNg
+reference: PBS
+stimuli: [frHMGB1, dsHMGB1, LPS, LPS_IFNg]
+
+filter:
+  min_count: 10        # a gene is kept if >= min_count reads ...
+  min_samples: 3       # ... in at least this many libraries
+  protein_coding_only: true
+
+de:
+  alpha: 0.05          # padj threshold for a responsive gene
+  min_abs_lfc: 1.0     # |log2FC| threshold for a responsive gene
+  n_cpus: 8
+
+signatures:
+  max_size: 100        # top-N genes kept per signature
+  min_size: 20         # fewer than this is reported as a weak signature
+  # shared response: up in dsHMGB1 and LPS vs PBS and NOT different between them
+  shared_max_abs_lfc_ds_vs_lps: 1.0
+  # biased: up vs PBS in the favoured stimulus and higher than the other stimulus
+  biased_min_lfc_contrast: 1.0
+  biased_padj_contrast: 0.05
+
+scoring:
+  # log2(CPM + pseudocount) per sample, z-scored per gene against the reference set
+  pseudocount: 1.0
+
+validation:
+  # leave-one-replicate-out: replicate k is removed from every arm, signatures are rebuilt
+  # from the remaining 2 replicates per arm and the 5 held-out libraries are scored
+  n_permutations: 10000
+
+candidate_genes:
+  mechanism: [Tlr4, Ly96, Cd14, Myd88, Ager, Casp4, Gsdmd, Nfkbia, Tnf, Il1b, Il6, Hmgb1]
+  # Curated macrophage pathogen-clearance genes (scavenger receptors, complement,
+  # Fc receptors, resident-macrophage capture receptors). Sources: Zeng et al. 2016
+  # Cell Host Microbe (CRIg/Vsig4 capture); Helmy et al. 2006 Cell (CRIg);
+  # Sanchez-Moral et al. 2021 Front Immunol (Cd5l); Arredouani 2005 / van der Laan 1999
+  # (Marco); Peiser & Gordon 2001 (Msr1); Gordon 2016 Immunity (phagocytosis).
+  clearance: [Marco, Msr1, Cd5l, Vsig4, Clec4f, Timd4, Cd163, Mrc1, Cd36, Colec12,
+              Siglec1, Stab1, Fcgr1, Fcgr2b, Fcgr3, Fcgr4, Itgam, Itgb2, C1qa, C1qb,
+              C1qc, C3, C3ar1, C5ar1, Cfp, Cd93, Lyz2, Cybb, Ncf1, Nos2, Slc11a1, Mertk,
+              Axl, Gas6, Clec7a, Cd209b]
+  clearance_gene_sets:
+    - GOBP_PHAGOCYTOSIS
+    - GOBP_PHAGOCYTOSIS_RECOGNITION
+    - GOBP_PHAGOCYTOSIS_ENGULFMENT
+    - GOBP_RECEPTOR_MEDIATED_ENDOCYTOSIS
+    - GOBP_COMPLEMENT_ACTIVATION
+    - GOBP_DEFENSE_RESPONSE_TO_BACTERIUM
+    - REACTOME_BINDING_AND_UPTAKE_OF_LIGANDS_BY_SCAVENGER_RECEPTORS
+    - REACTOME_SCAVENGING_BY_CLASS_A_RECEPTORS
+    - REACTOME_FCGAMMA_RECEPTOR_FCGR_DEPENDENT_PHAGOCYTOSIS
+    - REACTOME_COMPLEMENT_CASCADE
+    - REACTOME_ROS_AND_RNS_PRODUCTION_IN_PHAGOCYTES
+
+enrichment:
+  libraries: [hallmark, go_bp, reactome]
+  min_set_size: 10
+  max_set_size: 500
+  prerank_permutations: 1000
+  report_fdr: 0.25

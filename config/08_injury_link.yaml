@@ -1,0 +1,92 @@
+# Stage 08 — do macrophage functional programs relate to hepatocyte injury in septic liver
+# beyond the shared inflammatory magnitude and macrophage abundance? (GSE224127 whole liver)
+# Mouse is the unit. Scores are computed file by file (one count file = one sequencing batch),
+# exactly as in stage 04; no counts or scores are pooled across files before stratum centring.
+seed: 20261124
+stage: 08_injury_link
+
+inputs:
+  config_04: config/04_timecourse_spatial.yaml        # count files, expression settings, gene sets
+  design_04: results/04_timecourse/design.tsv
+  scores_04: results/04_timecourse/scores_by_sample.tsv  # used to check the recomputed scores
+  config_06: config/06_attribution.yaml                # reference cache key
+  refset_dir: data/processed/06_attribution            # cached reference vectors (stage 06)
+
+# Hepatocyte metabolic-function genes that fall in the septic/inflamed liver
+# (cytochrome P450 drug metabolism and negative acute-phase plasma proteins).
+# Function-loss score = minus the mean log2 change of these genes (higher = more loss).
+hepatocyte_function_genes: [Cyp1a2, Cyp2e1, Cyp3a11, Cyp2c29, Cyp2c37, Alb, Ttr, Rbp4, Trf]
+
+# Resolution-like programs scored from stage 06 macrophage references.
+# Each reference vector (log2 fold change, stimulus vs its own control) is restricted to that
+# reference's responsive genes and used as signed weights (up half minus down half).
+# Genes in the outcome sets, the NF-kB set and the macrophage-identity sets are removed so that
+# predictors and outcomes never share genes.
+resolution_references:
+  res_KC_TolLPS_6h: {ref: KC_TolLPS_6h}                    # LPS-tolerised Kupffer cells restimulated with LPS vs control
+  res_Tolerance_shift: {ref: Tolerance_shift}              # tolerised vs naive macrophages, both LPS-restimulated
+  res_KC_tol_vs_LPS: {ref: KC_TolLPS_6h, minus: KC_LPS_6h} # tolerised minus naive LPS response, same Kupffer-cell study
+min_abs_weight: 0.5        # derived (difference) vectors: genes with |weight| below this are dropped
+min_genes: 10              # a resolution score needs at least this many expressed genes
+
+scores:
+  outcomes: [hepatocyte_acute_phase, hepatocyte_function_loss]
+  programs: [kc_identity, clearance_phagocytosis, recruited_mono_mac,
+             res_KC_TolLPS_6h, res_Tolerance_shift, res_KC_tol_vs_LPS]
+  inflammation: nfkb_inflammatory
+  composition: pan_macrophage
+
+clp:
+  files: [CLP_d0.5, CLP_d0.25_d1]
+  grade: {sham: 0, mild: 1, moderate: 2, severe: 3}
+lps:
+  files: [LPS_timecourse, LPS_vs_control, LPS_KO, LPS_KO2]
+  groups: [control, LPS]          # wild-type mice only; knockouts and blockade enter part 3
+
+# adjustment levels: stratum fixed effects (scores centred within stratum)
+adjustment:
+  batch: [file_key]
+  batch_time: [file_key, time_d]
+primary_adjustment: {CLP: batch_time, LPS: batch}
+
+perturbations:
+  cytokine_injection:        # each injected arm vs the file's control injection
+    files: [Cytokine_combo, Cytokine_combo2]
+    reference: control
+  LPS_modifier:              # knockout / TNF blockade under LPS vs wild-type LPS, same file
+    files: [LPS_KO, LPS_KO2]
+    reference: LPS
+  CLP_modifier:              # knockout / TNF blockade under severe CLP vs isotype, same file
+    files: [CLP_CytoBlock, CLP_CytoBlock2, CLP_antiTNF]
+    reference: isotype
+  families:
+    cytokine_injection: [cytokine_injection]
+    modifiers: [LPS_modifier, CLP_modifier]
+    all_arms: [cytokine_injection, LPS_modifier, CLP_modifier]
+
+stats:
+  n_boot: 2000
+  fdr: 0.05
+
+# Composition of the bulk liver (addendum to part 1). Proxy scores per mouse, scored like the
+# stage 04 sets; they are NOT removed from the resolution-program weights (those stay as above).
+# S100a8 is left out of the neutrophil proxy because it carries weight in two tolerance-like
+# programs (res_KC_TolLPS_6h, res_KC_tol_vs_LPS); predictors and outcomes share no genes.
+composition_proxies:
+  recruited_mono_mac: [Ccr2, Ly6c2, Chil3, Lyz2, Plac8]   # same genes as the stage 04 set
+  neutrophil: [S100a9, Ly6g, Retnlg, Mmp8, Cxcr2, Csf3r]
+  leukocyte_ptprc: [Ptprc]
+  pan_macrophage: [Adgre1, Csf1r, Cd68, Fcgr1, Mafb]       # same genes as the stage 04 set
+composition_outcomes: [kc_identity, kc_identity_per_macrophage, clearance_phagocytosis,
+                       res_Tolerance_shift, res_KC_tol_vs_LPS,
+                       recruited_mono_mac, neutrophil, leukocyte_ptprc, pan_macrophage]
+composition_models:
+  unadjusted: []
+  nfkb: [nfkb_inflammatory]
+  recruited: [recruited_mono_mac]
+  neutrophil: [neutrophil]
+  leukocyte: [leukocyte_ptprc]
+  pan_macrophage: [pan_macrophage]
+  all_composition: [recruited_mono_mac, neutrophil, leukocyte_ptprc, pan_macrophage]
+  all_composition_nfkb: [recruited_mono_mac, neutrophil, leukocyte_ptprc, pan_macrophage, nfkb_inflammatory]
+composition_seed_offset: 1     # separate random stream so part 1-3 bootstraps are unchanged

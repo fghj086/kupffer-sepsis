@@ -1,0 +1,12 @@
+# Stage 00a — gene matrices and harmonised sample tables of the human sepsis blood cohorts
+# read by stage 07 (GAinS E-MTAB-5273 and E-MTAB-4421, MARS GSE65682, GSE95233, GSE57065, GSE222393).
+# Raw files: scripts/stages/00_download_human.sh. Each cohort is processed on its own.
+seed: 20261124
+stage: 00a_blood_cohorts
+raw: data/human/raw                  # downloaded public files
+processed: data/human/processed      # <cohort>_expr.tsv.gz written here
+preprocess:
+  min_mean_cpm: 1.0                  # RNA-seq gene floor before log2 CPM (GSE222393)
+sample_identity:
+  sex_gap_min: 1.0                   # minimum gap (log2) between the two genetic-sex clusters
+  exclude: {}                        # sample -> reason, for samples removed by hand (none)

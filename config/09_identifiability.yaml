@@ -1,0 +1,72 @@
+# Stage 09 — identifiability of the stimulus attribution (stage 06) under realistic conditions:
+# A detection limit of an HMGB1-like component with cross-laboratory LPS-like responses and real
+#   mouse-to-mouse noise; B attribution methods compared; C leave-one-series-out transfer of
+#   stimulus classes; D panel sensitivity of the tolerance-associated component.
+seed: 20261124
+stage: 09_identifiability
+cache_dir: data/processed/09_identifiability
+
+inputs:
+  config06: config/06_attribution.yaml
+  config01: config/01_perturbation.yaml
+  config02: config/02_sorted_bulk.yaml
+  signatures: results/01_perturbation/signatures.tsv
+
+noise:
+  min_mean_count: 20          # genes with mean raw count >= this across the KC libraries of a study
+  studies:
+    KC_2h: {accession: GSE328774}
+    KC_8h: {accession: GSE311736}
+
+mixture:
+  # LPS-like responses used as the "true" LPS-like part of the mixture (none from GSE200210,
+  # except the optimistic within-study case)
+  lps_sources: [within_GSE200210, KLA_6h, KC_LPS_6h, LPS_RAW_14h, LPS_24h_M1]
+  f_grid: [0.0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7]
+  n_draws: 300
+  panels: [macrophage_unmerged, macrophage_resolution_unmerged, hmgb1_vs_lps]
+  resid_panel: macrophage_resolution_unmerged   # real-fit R2 that sets the "fit residual" noise
+  null_quantile: 0.95
+  fixed_share_threshold: 0.05
+  power: 0.8
+  alpha_upper_bound: 0.05
+  # observed targets bounded; noise pattern from the matching sorted-KC study
+  upper_bound_targets:
+    KC_CLP_2h: KC_2h
+    KC_CLP_8h: KC_8h
+    CD45nonKC_CLP_8h: KC_8h
+    sc_all_Kupffer: KC_8h
+    sc_all_MonoMac: KC_8h
+    "sc_myeloid_Recruited Mo-macrophages": KC_8h
+    "sc_myeloid_KC-like (KC-marker-intermediate)": KC_8h
+  n_draws_upper_bound: 200
+
+methods:
+  ridge_lambdas: [0.0001, 0.001, 0.01, 0.1, 1.0]
+  enet_l1_ratios: [0.1, 0.5, 0.9]
+  mixture_panel: macrophage_unmerged
+  mixture_noise: [mouse_KC_2h, mouse_KC_8h]
+  mixture_f_grid: [0.0, 0.1, 0.2, 0.3, 0.5]
+  mixture_n_draws: 60
+
+transfer:
+  classes: [PAMP, DAMP, cytokine, resolution]
+  # fully reduced HMGB1 elicits no response in GSE200210 (stage 01); LPS+IFN-g arms are combined
+  # stimuli. Neither is attributed nor used as a reference here
+  exclude: [frHMGB1, LPS_IFNg_24h, KLA_IFNg_24h]
+  # contrasts against an LPS-stimulated arm rather than an unstimulated arm
+  difference_contrasts: [Tolerance_shift, Dex_on_LPS]
+  methods: [nnls, pearson]
+
+panel_sensitivity:
+  base: [LPS_24h, KLA_6h, Pam3CSK4, PolyIC, CpG, dsHMGB1, TissueHom_6h, Hemin, ApoptoticHepCM,
+         TNF, IL1b, IFNg, IFNb, IL6]
+  tolerance: [KC_TolLPS_6h, Tolerance_shift]
+  glucocorticoid_il10: [Dex, Dex_on_LPS, IL10]
+  # same study and cell type as KC_TolLPS_6h but without LPS pre-exposure (control for cell match)
+  cell_matched_lps: [KC_LPS_6h]
+  n_folds: 5
+  n_repeats: 20
+  n_perm: 50
+  correlation_refs: [KC_TolLPS_6h, Tolerance_shift, Dex, Dex_on_LPS, IL10, LPS_24h, KLA_6h,
+                     KC_LPS_6h, LPS_24h_M1, dsHMGB1]

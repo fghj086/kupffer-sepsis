@@ -1,0 +1,323 @@
+# Stage 06 — stimulus attribution of septic-liver transcriptional responses.
+# Every reference is a within-study contrast (stimulus vs that study's own unstimulated arm);
+# count matrices are never merged across studies. Reference vectors are differences of mean
+# log2(normalised expression + prior) between arms; responsive genes are called within each study
+# (pydeseq2 for raw counts, moderated t on log2 values for deposited normalised tables).
+seed: 20261124
+stage: 06_attribution
+
+gene_map: data/raw/GSE200210/annotation/ens102_mouse_genes.tsv   # Ensembl 102 -> symbol, biotype
+protein_coding_only: true
+
+expression:
+  prior_cpm: 1.0          # prior added on the CPM / FPKM scale before log2
+  min_level: 1.0          # gene kept in a study if mean normalised level >= this in >= 1 arm of a contrast
+responsive:
+  padj: 0.05
+  min_abs_lfc: 1.0
+  top_n_per_reference: 300  # cap so one large response does not define the gene universe
+  n_cpus: 8
+
+# ---------------------------------------------------------------------------------------------
+# Studies. kind: counts (raw integer counts) | norm (normalised linear scale: TMM, FPKM, DESeq2)
+#                | log2 (already log2 scale)
+# arms: regex on column name -> arm label (first match wins)
+# ---------------------------------------------------------------------------------------------
+studies:
+  GSE200210:
+    loader: gse200210
+    cell: BMDM
+    kind: counts
+  GSE232827:
+    loader: gse232827
+    path: data/raw/06_GSE232827/GSE232827_raw_counts.csv.gz
+    cell: BMDM
+    kind: counts
+    # column prefixes follow the GEO sample order (IFN-b, IFN-g, TGF-b, TNF, untreated);
+    # the mapping is checked against canonical response genes when loaded
+    arms: {"^Bib": IFNb, "^Big": IFNg, "^Btg": TGFb, "^Btn": TNF, "^But": untreated}
+  GSE315641:
+    loader: gse315641
+    path: data/raw/06_GSE315641/GSE315641_TMMnorm-allbatches.txt.gz
+    cell: BMDM
+    kind: norm
+    arms: {"^ctrl_T\\d": ctrl_b3, "^il1b_T\\d": IL1b, "^ctrl-\\d": ctrl_b2, "^ifny-\\d": IFNg,
+           "^il6-\\d": IL6, "^il10-\\d": IL10}
+  GSE72964:
+    loader: gse72964
+    path: data/raw/06_GSE72964/GSE72964_GeneExpression.txt.gz
+    cell: BMDM
+    kind: norm
+    arms: {"\\.WT\\.BMDM\\.RNA-seq\\.no\\.treatment\\.6h": ctrl_6h,
+           "\\.WT\\.BMDM\\.RNA-seq\\.no\\.treatment\\.24h": ctrl_24h,
+           "\\.WT\\.BMDM\\.RNA-seq\\.KLA\\.6h": KLA_6h,
+           "\\.WT\\.BMDM\\.RNA-seq\\.KLA\\+IFNg\\.24h": KLA_IFNg_24h,
+           "\\.WT\\.BMDM\\.RNA-seq\\.Pam3CSK4\\.6h": Pam3_6h,
+           "\\.WT\\.BMDM\\.RNA-seq\\.PolyIC\\.6h": PolyIC_6h,
+           "\\.WT\\.BMDM\\.RNA-seq\\.tissuehomogenate\\.6h": TissueHom_6h,
+           "\\.WT\\.BMDM\\.RNA-seq\\.tissuehomogenate\\.24h": TissueHom_24h}
+  GSE221734:
+    loader: gse221734
+    path: data/raw/06_GSE221734/samples
+    cell: BMDM
+    kind: counts
+    arms: {"WT-Veh-": vehicle, "WT-Hemin-": hemin}
+  GSE193577:
+    loader: gse193577
+    path: data/raw/06_GSE193577/GSE193577_fpkm_sample.txt.gz
+    cell: BMDM
+    kind: norm
+    arms: {"^WTNC_": untreated, "^WTACM_": ACM}
+  GSE240633:
+    loader: gse240633
+    path: data/raw/06_GSE240633/GSE240633_R_RNA-seq_GEO_processed.txt.gz
+    cell: RAW264.7
+    kind: counts
+    # A = Lamtor1-KO reconstituted with wild-type Lamtor1 (series-matrix descriptions A1-1 ...)
+    arms: {"^A1-\\d_count": mock, "^A2-\\d_count": CpG, "^A5-\\d_count": PolyIC, "^A6-\\d_count": LPS}
+  GSE300953:
+    loader: gse300953
+    path: data/raw/06_GSE300953/samples
+    cell: Kupffer cell (primary, cultured)
+    kind: log2
+    arms: {"^Ctrl_": ctrl, "^LPS_": LPS_6h, "^Tol_": Tol_LPS_6h}
+  GSE157518:
+    loader: gse157518
+    path: data/raw/06_GSE157518/GSE157518_Tol_Imm_counts.txt.gz
+    cell: BMDM
+    kind: counts
+    arms: {"^IgG2_Imm_": naive_LPS_4h, "^IgG2_Tol_": tolerised_LPS_4h}
+  GSE306502:
+    loader: gse306502
+    path: data/raw/06_GSE306502/samples
+    cell: BMDM
+    kind: counts
+    arms: {"dFlox\\dM0Veh": M0_veh, "dFlox\\dM0Dex": M0_dex, "dFlox\\dM1Veh": M1_veh,
+           "dFlox\\dM1Dex": M1_dex}
+  GSE224127_cyto:
+    loader: gse224127
+    file_key: Cytokine_combo
+    cell: whole liver (in vivo)
+    kind: counts
+  GSE224127_cyto2:
+    loader: gse224127
+    file_key: Cytokine_combo2
+    cell: whole liver (in vivo)
+    kind: counts
+  GSE224127_lps:
+    loader: gse224127
+    file_key: LPS_vs_control
+    cell: whole liver (in vivo)
+    kind: counts
+
+gse224127:
+  design: results/04_timecourse/design.tsv
+  raw_dir: data/raw/GSE224127
+  extra_dir: data/processed/04_gse224127_extra
+
+# ---------------------------------------------------------------------------------------------
+# References: name -> study, test arm, control arm, time (h), stimulus class
+# class: PAMP | DAMP | cytokine | resolution
+# ---------------------------------------------------------------------------------------------
+references:
+  LPS_24h:        {study: GSE200210, test: LPS,          control: PBS,       time_h: 24, cls: PAMP}
+  dsHMGB1:        {study: GSE200210, test: dsHMGB1,      control: PBS,       time_h: 24, cls: DAMP}
+  frHMGB1:        {study: GSE200210, test: frHMGB1,      control: PBS,       time_h: 24, cls: DAMP}
+  LPS_IFNg_24h:   {study: GSE200210, test: LPS_IFNg,     control: PBS,       time_h: 24, cls: PAMP}
+  TNF:            {study: GSE232827, test: TNF,          control: untreated, time_h: 6,  cls: cytokine}
+  IFNb:           {study: GSE232827, test: IFNb,         control: untreated, time_h: 6,  cls: cytokine}
+  IFNg:           {study: GSE232827, test: IFNg,         control: untreated, time_h: 6,  cls: cytokine}
+  IFNg_24h:       {study: GSE315641, test: IFNg,         control: ctrl_b2,   time_h: 24, cls: cytokine}
+  IL1b:           {study: GSE315641, test: IL1b,         control: ctrl_b3,   time_h: 24, cls: cytokine}
+  IL6:            {study: GSE315641, test: IL6,          control: ctrl_b2,   time_h: 24, cls: cytokine}
+  IL10:           {study: GSE315641, test: IL10,         control: ctrl_b2,   time_h: 24, cls: resolution}
+  KLA_6h:         {study: GSE72964,  test: KLA_6h,       control: ctrl_6h,   time_h: 6,  cls: PAMP}
+  KLA_IFNg_24h:   {study: GSE72964,  test: KLA_IFNg_24h, control: ctrl_24h,  time_h: 24, cls: PAMP}
+  Pam3CSK4:       {study: GSE72964,  test: Pam3_6h,      control: ctrl_6h,   time_h: 6,  cls: PAMP}
+  PolyIC:         {study: GSE72964,  test: PolyIC_6h,    control: ctrl_6h,   time_h: 6,  cls: PAMP}
+  TissueHom_6h:   {study: GSE72964,  test: TissueHom_6h, control: ctrl_6h,   time_h: 6,  cls: DAMP}
+  TissueHom_24h:  {study: GSE72964,  test: TissueHom_24h, control: ctrl_24h, time_h: 24, cls: DAMP}
+  Hemin:          {study: GSE221734, test: hemin,        control: vehicle,   time_h: 12, cls: DAMP}
+  ApoptoticHepCM: {study: GSE193577, test: ACM,          control: untreated, time_h: 24, cls: DAMP}
+  CpG:            {study: GSE240633, test: CpG,          control: mock,      time_h: 14, cls: PAMP}
+  LPS_RAW_14h:    {study: GSE240633, test: LPS,          control: mock,      time_h: 14, cls: PAMP}
+  PolyIC_RAW:     {study: GSE240633, test: PolyIC,       control: mock,      time_h: 14, cls: PAMP}
+  KC_LPS_6h:      {study: GSE300953, test: LPS_6h,       control: ctrl,      time_h: 6,  cls: PAMP}
+  KC_TolLPS_6h:   {study: GSE300953, test: Tol_LPS_6h,   control: ctrl,      time_h: 24, cls: resolution}
+  Tolerance_shift: {study: GSE157518, test: tolerised_LPS_4h, control: naive_LPS_4h, time_h: 21, cls: resolution}
+  LPS_24h_M1:     {study: GSE306502, test: M1_veh,       control: M0_veh,    time_h: 28, cls: PAMP}
+  Dex:            {study: GSE306502, test: M0_dex,       control: M0_veh,    time_h: 4,  cls: resolution}
+  Dex_on_LPS:     {study: GSE306502, test: M1_dex,       control: M1_veh,    time_h: 4,  cls: resolution}
+  # in vivo whole liver, 0.5 d after injection (GSE224127)
+  liv_TNF:   {study: GSE224127_cyto, test: TNF,   control: control, time_h: 12, cls: cytokine}
+  liv_IL1b:  {study: GSE224127_cyto, test: IL1b,  control: control, time_h: 12, cls: cytokine}
+  liv_IFNg:  {study: GSE224127_cyto, test: IFNg,  control: control, time_h: 12, cls: cytokine}
+  liv_IL6:   {study: GSE224127_cyto, test: IL6,   control: control, time_h: 12, cls: cytokine}
+  liv_IL10:  {study: GSE224127_cyto, test: IL10,  control: control, time_h: 12, cls: resolution}
+  liv_IL18:  {study: GSE224127_cyto, test: IL18,  control: control, time_h: 12, cls: cytokine}
+  liv_LPS:   {study: GSE224127_lps,  test: LPS,   control: control, time_h: 12, cls: PAMP}
+  # in vivo combinations: held out, used as positive controls for the liver panel
+  liv_TNFIFNg:  {study: GSE224127_cyto, test: TNFIFNg,  control: control, time_h: 12, cls: combo}
+  liv_TNFIL6:   {study: GSE224127_cyto, test: TNFIL6,   control: control, time_h: 12, cls: combo}
+  liv_IFNgIL1b: {study: GSE224127_cyto, test: IFNgIL1b, control: control, time_h: 12, cls: combo}
+  liv_IL1bIL6:  {study: GSE224127_cyto, test: IL1bIL6,  control: control, time_h: 12, cls: combo}
+  liv_IFNgIL6:  {study: GSE224127_cyto, test: IFNgIL6,  control: control, time_h: 12, cls: combo}
+  liv_TNFIL1b:  {study: GSE224127_cyto2, test: TNFIL1b, control: control, time_h: 12, cls: combo}
+
+# Panels used for attribution. Held-out references never enter a panel.
+panels:
+  # macrophage panel: one reference per stimulus, PAMP / DAMP / cytokine
+  macrophage: [LPS_24h, KLA_6h, Pam3CSK4, PolyIC, CpG, dsHMGB1, TissueHom_6h, Hemin,
+               ApoptoticHepCM, TNF, IL1b, IFNg, IFNb, IL6, IL10]
+  # macrophage panel plus tolerance / late-LPS / glucocorticoid references
+  macrophage_resolution: [LPS_24h, KLA_6h, Pam3CSK4, PolyIC, CpG, dsHMGB1, TissueHom_6h, Hemin,
+                          ApoptoticHepCM, TNF, IL1b, IFNg, IFNb, IL6, IL10,
+                          KC_TolLPS_6h, Tolerance_shift, Dex, Dex_on_LPS]
+  # in vivo liver panel (single injected cytokines and LPS)
+  liver: [liv_LPS, liv_TNF, liv_IL1b, liv_IFNg, liv_IL6, liv_IL10, liv_IL18]
+  # liver panel plus macrophage DAMP and resolution references (cross-tissue; flagged)
+  # (macrophage LPS references are included so that the macrophage HMGB1-like term cannot stand
+  #  in for the macrophage inflammatory response as a whole)
+  liver_plus: [liv_LPS, liv_TNF, liv_IL1b, liv_IFNg, liv_IL6, liv_IL10, liv_IL18,
+               LPS_24h, KLA_6h, dsHMGB1, TissueHom_6h, KC_TolLPS_6h, Tolerance_shift, Dex]
+
+  # two-reference panel for the in-vitro identifiability of the HMGB1-like component
+  hmgb1_vs_lps: [LPS_24h, dsHMGB1]
+
+# panel used for each target family (macrophage-type targets vs whole-tissue targets)
+target_panels:
+  macrophage_like: [macrophage, macrophage_resolution]
+  tissue_like: [liver, liver_plus, macrophage_resolution]
+
+model:
+  collinear_r: 0.9        # reference pairs above this are flagged and merged for the main fit
+  n_boot: 500             # gene bootstrap
+  ridge_alpha: 0.1        # for signed fits of blockade (difference) contrasts
+  # panels also fitted without merging collinear pairs (sensitivity; the LPS_24h / dsHMGB1 pair is
+  # separable within GSE200210 by leave-one-replicate-out, but collinear above collinear_r)
+  unmerged_sensitivity: [macrophage, macrophage_resolution, liver_plus]
+# same stimulus measured in different studies, for the study-versus-stimulus comparison
+cross_study_pairs:
+  - [LPS_24h, KLA_6h]
+  - [LPS_24h, LPS_24h_M1]
+  - [LPS_24h, KC_LPS_6h]
+  - [LPS_24h, LPS_RAW_14h]
+  - [KLA_6h, KC_LPS_6h]
+  - [KLA_6h, LPS_24h_M1]
+  - [LPS_24h_M1, KC_LPS_6h]
+  - [IFNg, IFNg_24h]
+  - [PolyIC, PolyIC_RAW]
+  - [liv_LPS, LPS_24h]
+  - [liv_TNF, TNF]
+  - [liv_IL1b, IL1b]
+  - [liv_IFNg, IFNg]
+  - [liv_IL6, IL6]
+  - [liv_IL10, IL10]
+controls:
+  mixture_weights: [0.25, 0.5, 0.75]
+  mixture_pairs:
+    - [LPS_24h, dsHMGB1]
+    - [LPS_24h, KC_TolLPS_6h]
+    - [dsHMGB1, KC_TolLPS_6h]
+    - [LPS_24h, IFNg]
+    - [TNF, IL1b]
+    - [IFNb, IFNg]
+    - [LPS_24h, IL10]
+    - [dsHMGB1, TissueHom_6h]
+    - [LPS_24h, Dex]
+    - [KLA_6h, TNF]
+    - [liv_TNF, liv_IFNg]
+    - [liv_LPS, liv_IL6]
+  # held-out positive controls: target -> references expected to dominate
+  heldout:
+    LPS_IFNg_24h: {panel: macrophage, expect: [LPS_24h, KLA_6h, IFNg, IFNb]}
+    KLA_IFNg_24h: {panel: macrophage, expect: [LPS_24h, KLA_6h, IFNg, IFNb]}
+    LPS_RAW_14h: {panel: macrophage, expect: [LPS_24h, KLA_6h]}
+    KC_LPS_6h: {panel: macrophage, expect: [LPS_24h, KLA_6h]}
+    LPS_24h_M1: {panel: macrophage, expect: [LPS_24h, KLA_6h]}
+    liv_TNFIFNg: {panel: liver, expect: [liv_TNF, liv_IFNg]}
+    liv_TNFIL6: {panel: liver, expect: [liv_TNF, liv_IL6]}
+    liv_IFNgIL1b: {panel: liver, expect: [liv_IFNg, liv_IL1b]}
+    liv_IL1bIL6: {panel: liver, expect: [liv_IL1b, liv_IL6]}
+    liv_IFNgIL6: {panel: liver, expect: [liv_IFNg, liv_IL6]}
+    liv_TNFIL1b: {panel: liver, expect: [liv_TNF, liv_IL1b]}
+  # magnitude-matched LPS test in GSE200210 (stage 01 scale factor)
+  lps_scale: 0.74
+
+# ---------------------------------------------------------------------------------------------
+# Targets
+# ---------------------------------------------------------------------------------------------
+targets:
+  stage02:
+    dir: results/02_sorted_bulk
+    files:
+      KC_CLP_2h: {file: de_GSE328774_KC.tsv, family: macrophage_like, cell: KC, time_h: 2}
+      KC_CLP_8h: {file: de_GSE311736_KC.tsv, family: macrophage_like, cell: KC, time_h: 8}
+      CD45nonKC_CLP_8h: {file: de_GSE311736_CD45_nonKC.tsv, family: macrophage_like, cell: CD45+ non-KC, time_h: 8}
+      HEP_CLP_8h: {file: de_GSE311736_HEP.tsv, family: tissue_like, cell: hepatocyte, time_h: 8}
+      HSC_CLP_8h: {file: de_GSE311736_HSC.tsv, family: tissue_like, cell: stellate, time_h: 8}
+      LSEC_CLP_8h: {file: de_GSE311736_LSEC.tsv, family: tissue_like, cell: LSEC, time_h: 8}
+      HEP_FSP_GSE303231: {file: de_GSE303231_HEP.tsv, family: tissue_like, cell: hepatocyte, time_h: .nan}
+    min_base_mean: 20
+  stage05:
+    dir: results/05_proteomics
+    files:
+      liver_proteome_CLP_24h: {file: protein_de_PXD062961.tsv, family: tissue_like, cell: whole liver protein, time_h: 24}
+      KC_protein_LPS_6h: {file: protein_de_Qie2022_KC_LPS_vs_PBS.tsv, family: macrophage_like, cell: KC protein (cultured), time_h: 6}
+  stage04:
+    # each GSE224127 batch against its own reference arm, as in stage 04
+    timecourse:
+      - {file_key: LPS_timecourse, model: LPS, reference: control}
+      - {file_key: CLP_d0.25_d1, model: CLP, reference: sham}
+      - {file_key: CLP_d0.5, model: CLP, reference: sham}
+    blockade:
+      - {file_key: CLP_antiTNF, test: antiTNF, reference: isotype}
+      - {file_key: CLP_antiTNF, test: TNFKO, reference: isotype}
+      - {file_key: CLP_CytoBlock, test: IFNgKOantiTNF, reference: isotype}
+      - {file_key: CLP_CytoBlock, test: IL18KOantiTNF, reference: isotype}
+      - {file_key: CLP_CytoBlock2, test: IL1bKOantiTNF, reference: isotype}
+      - {file_key: LPS_KO, test: LPSTNFKO, reference: LPS}
+      - {file_key: LPS_KO, test: LPSantiTNF, reference: LPS}
+      - {file_key: LPS_KO, test: LPSIRF1KO, reference: LPS}
+      - {file_key: LPS_KO2, test: LPSSTAT1KO, reference: LPS}
+      - {file_key: LPS_KO2, test: LPSIFNgKOantiTNF, reference: LPS}
+      - {file_key: LPS_KO2, test: LPSIL1bKOantiTNF, reference: LPS}
+      - {file_key: LPS_KO2, test: LPSIL18KOantiTNF, reference: LPS}
+  stage03:
+    # per-population pseudobulk log2FC tables, if stage 03 writes them
+    candidates: [results/03_single_cell/pseudobulk_de.tsv, results/03_single_cell/population_de.tsv]
+    min_cells: 30          # per condition and population
+controls_panels:
+  loro: [macrophage, macrophage_resolution, liver, hmgb1_vs_lps]
+  mixture: [macrophage_resolution, liver]
+
+# ---------------------------------------------------------------------------------------------
+# Public reference candidates screened (GEO esearch, mouse, high-throughput expression profiling);
+# written to results/06_attribution/reference_candidates.tsv
+# ---------------------------------------------------------------------------------------------
+candidates:
+  - [GSE200210, "BMDM PBS / fully reduced HMGB1 / disulfide HMGB1 / LPS / LPS+IFN-g 24 h, 3 each, counts", chosen, "HMGB1 and LPS references; LPS+IFN-g held out as positive control"]
+  - [GSE232827, "BMDM untreated / IFN-b / IFN-g / TNF / TGF-b 6 h, 3 each, raw counts", chosen, "TNF, IFN-b, IFN-g with matched untreated arm"]
+  - [GSE315641, "BMDM 24 h cytokine atlas (IFN-g, IL-6, IL-10, IL-4, IL-13, IL-33, TGF-b, GM-CSF; IL-1b in a separate batch with its own control), 4-6 each, TMM-normalised", chosen, "IL-1b, IL-6, IL-10 (and IFN-g 24 h); each against the control of its own batch; deposited table has ~11k genes"]
+  - [GSE72964, "BMDM Pam3CSK4 / poly(I:C) / KDO2-lipid A 6 h, KLA+IFN-g 24 h, tissue homogenate 6 h and 24 h, 2-3 each, FPKM", chosen, "TLR2, TLR3, TLR4 bridge and a tissue-damage reference in one study; KLA+IFN-g held out"]
+  - [GSE221734, "BMDM hemin 12 h vs vehicle, 3 each, expected counts", chosen, "heme reference"]
+  - [GSE193577, "BMDM apoptotic hepatocyte (AML12) conditioned medium 24 h vs untreated, 4 each, FPKM", chosen, "dying-hepatocyte DAMP reference (wild-type arms only)"]
+  - [GSE240633, "RAW264.7 (Lamtor1-KO + WT Lamtor1) mock / CpG-B / R848 / cGAMP / poly(I:C) / LPS 14 h, 3 each, counts", chosen, "CpG (TLR9); LPS and poly(I:C) arms held out as cross-study controls; cell line"]
+  - [GSE300953, "primary Kupffer cells, control / LPS 6 h / LPS-tolerised then LPS 6 h, 2 each, log2 TMM-CPM", chosen, "endotoxin-tolerance reference in Kupffer cells; acute LPS arm held out"]
+  - [GSE157518, "BMDM control-Ig then LPS 4 h vs LPS-pre-exposed then LPS 4 h (IgG arms), 3 each, counts", chosen, "tolerance shift (tolerised minus naive LPS response); no unstimulated arm"]
+  - [GSE306502, "BMDM M0 / M1 (LPS 24 h) / M2, vehicle vs dexamethasone 4 h, 4 each, featureCounts", chosen, "glucocorticoid references (alone and on LPS-activated cells); M1 vs M0 held out as late-LPS control; series RAW.tar truncated on the mirror, per-sample files used"]
+  - [GSE224127, "mouse liver in vivo: single and paired cytokine injections, LPS, CLP time courses and blockade", chosen, "in vivo liver references (single cytokines, LPS) and held-out cytokine pairs; time-course and blockade targets"]
+  - [GSE209565, "BMDM TNF / Pam3CSK4, WT vs Tnf-/-", rejected, "Fluidigm single-cell and ChIP counts, no bulk replicate design with unstimulated arm"]
+  - [GSE225855, "immortalised BMDM, beta-glucan then Pam3CSK4 across cell divisions", rejected, "training design; no single-stimulus panel"]
+  - [GSE75210, "BMDM 12 ligands x 0-4 h, WT vs Myd88-/-", rejected, "time series to 4 h with one replicate per plate cell; too early for 2-24 h targets"]
+  - [GSE249261, "BMDM lipid A / TNF time courses (chromatin-associated RNA), NF-kB subunit knockouts", rejected, "nascent RNA and 2 h maximum; mostly single replicates"]
+  - [GSE231343, "BMDM IL-6 / IL-10 1-4 h, 2 each, DESeq2-normalised", rejected, "count-table columns ('Sample N') cannot be mapped to GEO samples unambiguously"]
+  - [GSE231344, "BMDM IL-6 / IL-10 with JAK2 inhibitor, 1-2 h", rejected, "1-2 h only and inhibitor design"]
+  - [GSE234655, "BMDM LPS tolerance, EED KO", rejected, "only DEG tables deposited"]
+  - [GSE89918, "peritoneal macrophages naive / LPS / tolerised+LPS", rejected, "one library per condition"]
+  - [GSE137412, "BMDM vehicle / LPS 6 h / Dex+LPS", rejected, "glucocorticoid only as pretreatment; GSE306502 covers Dex alone and on LPS-activated cells"]
+  - [GSE245834, "BMDM control / LPS+IFN-g / efferocytosis 16 h, 2 each", rejected, "apoptotic NIH-3T3 co-culture with dimerizer; normalised counts only; GSE193577 used for dying-cell reference"]
+  - [GSE145243, "BMDM erythrophagocytosis", rejected, "heme covered by GSE221734 (direct hemin) with cleaner design"]
+  - [GSE108553, "Kupffer cells and alveolar macrophages, naive vs LPS-injected", rejected, "microarray platform"]
+  - [GSE122108, "ImmGen OpenSource mononuclear phagocytes", rejected, "steady-state populations; no matched stimulation panel"]
+  - [GSE67355, "BMDM lipid A time course (Smale lab)", rejected, "only bedGraph tracks deposited"]

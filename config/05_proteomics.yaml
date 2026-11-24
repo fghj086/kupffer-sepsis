@@ -1,0 +1,100 @@
+# Stage 05 — protein layer: liver and liver-macrophage proteomes after polymicrobial sepsis or LPS.
+# Processed protein tables only (no raw MS reprocessing). Every contrast is analysed within its own
+# study; studies are compared by effect direction and size only.
+seed: 20261124
+stage: 05_proteomics
+
+datasets:
+  PXD062961:
+    kind: diann_pg_matrix
+    zip: data/raw/05_PXD062961/output.zip
+    design_xlsx: data/raw/05_PXD062961/Experimental_design_forPRIDE.xlsx
+    material: whole liver
+    model: CLP
+    time_h: 24
+    unit: mouse
+    contrast: {test: CLP, reference: Sham}
+    description: "whole liver, CLP 24 h vs sham, 4 + 4 mice, DIA (DIA-NN 1.9.2 MaxLFQ)"
+  Qie2022_invivoLPS_KC_vs_recruited:
+    kind: copy_number_xlsx
+    xlsx: data/raw/05_PXD021657/Qie2022_SupplementaryData9_invivoLPS_resident_vs_recruited.xlsx
+    sheet: Liver stimulated with LPS
+    material: FACS-sorted liver macrophages (F4/80 and CD11b bright/dim gating)
+    model: LPS in vivo
+    time_h: null      # not stated in the article text
+    unit: replicate sort (pooling of mice not stated)
+    groups:          # column prefix -> group label
+      "WT_Kupffer cells_": KC
+      "WT_Liver recruited MΦ_": recruited
+    contrast: {test: recruited, reference: KC}
+    description: "in vivo LPS, sorted Kupffer cells vs liver-recruited macrophages, 3 + 3 (PXD021657)"
+  Qie2022_KC_LPS_vs_PBS:
+    kind: copy_number_xlsx
+    xlsx: data/raw/05_PXD021657/Qie2022_SupplementaryData11_KC_LPS_vs_PBS.xlsx
+    sheet: Kupffer cells
+    material: isolated, cultured Kupffer cells (wild type)
+    model: LPS ex vivo
+    time_h: 6
+    unit: culture replicate
+    groups:
+      "WT_Kupffer cells_PBS_": PBS
+      "WT_Kupffer cells_LPS_": LPS
+    contrast: {test: LPS, reference: PBS}
+    description: "cultured wild-type Kupffer cells, LPS vs PBS 6 h, 3 + 3 (PXD021657)"
+
+symbol_map: data/raw/05_MGI/MRK_List1.rpt   # withdrawn symbol -> current MGI symbol
+
+preprocessing:
+  log_base: 2
+  normalise: median        # per-sample median centring of log2 abundance
+  min_valid_per_group: {4: 3, 3: 2}   # group size -> values required in BOTH groups to be tested
+  impute: none             # no imputation; on/off proteins are listed but not tested
+  on_off_min_present: 1.0  # fraction of one group detected while the other group is 0 % -> on/off flag
+
+stats:
+  test: moderated_t        # limma-style empirical Bayes variance shrinkage (Smyth 2004)
+  fdr: 0.05
+  n_perm: 10000            # gene-label permutations for signature enrichment
+
+# Protein sets (mouse symbols). Marker-based labels are annotations, not lineage proof.
+# Lists mirror config/04_timecourse_spatial.yaml where the same program is scored.
+protein_sets:
+  kc_identity: [Clec4f, Timd4, Vsig4, Cd5l, Marco, Id3]
+  recruited_mono_mac: [Ccr2, Ly6c1, Ly6c2, Chil3, Lyz2, Plac8]
+  neutrophil_s100: [S100a8, S100a9, Ngp, Camp, Ltf, Lcn2]   # S100A8/9 are neutrophil-dominant
+  pan_macrophage: [Adgre1, Csf1r, Cd68, Fcgr1, Mafb]
+  clearance_phagocytosis: [C1qa, C1qb, C1qc, Fcgr2b, Fcgr3, Msr1, Cd36, Mertk, Cd163,
+                           Siglec1, Colec12, Cybb, Ctss]
+  complement_c1q: [C1qa, C1qb, C1qc]
+  nfkb_inflammatory: [Nfkbia, Nfkbiz, Tnfaip3, Nfkb2, Relb, Tnf, Il1b, Cxcl1, Cxcl2, Ccl2,
+                      Ccl3, Ccl4, Icam1, Ptgs2, Il6, Cd83]
+  inflammatory_effector_protein: [Nos2, Acod1, Saa3, Sod2, Irf1, Nfkb2, Relb, Icam1, Il1b, Ptgs2]
+  hepatocyte_acute_phase: [Saa1, Saa2, Lcn2, Orm2, Hp, Fgb]
+single_proteins: [Hmgb1, Tlr4, Ly96, Cd14, Ager]
+
+# Transcript-level comparators produced by other stages or computed here from public counts.
+transcripts:
+  GSE224127_CLP_d1_liver:   # computed in this stage from the public count file (whole liver)
+    counts: data/raw/GSE224127/GSE224127_8_counts_CLP_timecourse2.txt.gz
+    design: results/04_timecourse/design.tsv
+    file_key: CLP_d0.25_d1
+    tissue_prefix: LI_
+    time_d: 1
+    test_groups: [moderate, severe]
+    reference_group: sham
+    min_mean_cpm: 1.0
+  GSE328774_KC_CLP2h: {table: results/02_sorted_bulk/de_GSE328774_KC.tsv, gene: gene, lfc: log2FoldChange, p: pvalue}
+  GSE311736_KC_CLP8h: {table: results/02_sorted_bulk/de_GSE311736_KC.tsv, gene: gene, lfc: log2FoldChange, p: pvalue}
+  GSE311736_HEP_CLP8h: {table: results/02_sorted_bulk/de_GSE311736_HEP.tsv, gene: gene, lfc: log2FoldChange, p: pvalue}
+  GSE200210_BMDM_LPS: {table: results/01_perturbation/de_LPS.tsv, gene: gene, lfc: log2FC, p: pvalue}
+  GSE200210_BMDM_dsHMGB1: {table: results/01_perturbation/de_dsHMGB1.tsv, gene: gene, lfc: log2FC, p: pvalue}
+  stage03_recruited_vs_KC: {glob: "results/03_single_cell/*recruited*vs*KC*.tsv"}
+
+# protein dataset -> transcript comparators (same model, nearest time / cell type)
+concordance_pairs:
+  PXD062961: [GSE224127_CLP_d1_liver, GSE311736_HEP_CLP8h]
+  Qie2022_KC_LPS_vs_PBS: [GSE200210_BMDM_LPS, GSE200210_BMDM_dsHMGB1, GSE328774_KC_CLP2h, GSE311736_KC_CLP8h]
+  Qie2022_invivoLPS_KC_vs_recruited: [stage03_recruited_vs_KC]
+
+signatures:
+  path: results/01_perturbation/signatures.tsv   # columns: signature, gene, weight

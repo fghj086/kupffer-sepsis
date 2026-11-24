@@ -1,0 +1,67 @@
+# Stage 04 — liver time courses and cytokine perturbations (GSE224127) and
+# whole-mouse spatial transcriptomics after LPS (GSE248904).
+seed: 20261124
+stage_timecourse: 04_timecourse
+stage_spatial: 04_spatial
+
+gse224127:
+  raw_dir: data/raw/GSE224127                 # count files 1-8, 11 and series matrices
+  extra_dir: data/processed/04_gse224127_extra # metadata + count files 9, 10
+  series_matrices:
+    - GSE224127-GPL21626_series_matrix.txt.gz
+    - GSE224127-GPL30172_series_matrix.txt.gz
+  author_metadata: GSE224127_metadata.txt.gz
+  tissue: LI
+  # count file -> design role; each file is one sequencing batch, analysed on its own
+  files:
+    LPS_timecourse: {path: raw, file: GSE224127_1_counts_LPS_timecourse.txt.gz}
+    CLP_d0.5: {path: raw, file: GSE224127_2_counts_CLP_timecourse.txt.gz}
+    Cytokine_combo: {path: raw, file: GSE224127_3_counts_Cytokine_combo.txt.gz}
+    Cytokine_combo2: {path: raw, file: GSE224127_4_counts_Cytokine_combo2.txt.gz}
+    LPS_vs_control: {path: raw, file: GSE224127_5_counts_LPS_Plasma.txt.gz}
+    LPS_KO: {path: raw, file: GSE224127_6_counts_LPS_KO.txt.gz}
+    LPS_KO2: {path: raw, file: GSE224127_7_counts_LPS_KO2.txt.gz}
+    CLP_d0.25_d1: {path: raw, file: GSE224127_8_counts_CLP_timecourse2.txt.gz}
+    CLP_CytoBlock: {path: extra, file: GSE224127_9_counts_CLP_CytoBlock.txt.gz}
+    CLP_CytoBlock2: {path: extra, file: GSE224127_10_counts_CLP_CytoBlock2.txt.gz}
+    CLP_antiTNF: {path: raw, file: GSE224127_11_counts_CLP_antiTNF.txt.gz}
+
+expression:
+  pseudocount: 1.0        # log2(normalised CPM + pseudocount); median-of-ratios size factors
+  min_mean_cpm: 1.0       # a set gene is scored in a file only if mean CPM >= this in liver
+
+# Gene sets (mouse symbols). Marker-based labels are annotations, not lineage proof.
+gene_sets:
+  kc_identity: [Clec4f, Timd4, Vsig4, Cd5l, Marco, Id3]
+  recruited_mono_mac: [Ccr2, Ly6c2, Chil3, Lyz2, Plac8]
+  pan_macrophage: [Adgre1, Csf1r, Cd68, Fcgr1, Mafb]
+  nfkb_inflammatory: [Nfkbia, Nfkbiz, Tnfaip3, Nfkb2, Relb, Tnf, Il1b, Cxcl1, Cxcl2, Ccl2,
+                      Ccl3, Ccl4, Icam1, Ptgs2, Il6, Cd83]
+  clearance_phagocytosis: [C1qa, C1qb, C1qc, Fcgr2b, Fcgr3, Msr1, Cd36, Mertk, Cd163,
+                           Siglec1, Colec12, Cybb, Ctss]
+  hepatocyte_acute_phase: [Saa1, Saa2, Lcn2, Orm2, Hp, Fgb]
+single_genes: [Hmgb1, Tlr4, Ly96, Cd14, Ager]
+
+stats:
+  fdr: 0.05
+  n_boot: 2000            # mouse-level bootstrap for peak-time stability and CIs
+
+signatures:
+  path: results/01_perturbation/signatures.tsv   # columns: signature, gene, weight
+
+spatial:
+  h5ad: data/raw/GSE248904/GSE248904_All_Samples.h5ad
+  hepatocyte_markers: [Alb, Apoa1, Ttr, Apoc3, Serpina1a]
+  zonation:
+    pericentral: [Cyp2e1, Glul, Oat, Cyp1a2]
+    periportal: [Cyp2f2, Hal, Sds, Pck1]
+  hepatocyte_stress: [Saa1, Saa2, Lcn2, Orm2, Hp, Fgb]
+  n_neighbors: 6          # grid neighbours for spatial lag
+  subsample_per_sample: 3000
+  liver_cache: data/processed/04_spatial_liver.h5ad
+  ring_neighbours: [25, 50]   # non-adjacent reference ring (neighbour ranks)
+  myeloid_sets: [kc_identity, recruited_mono_mac, nfkb_inflammatory]
+  bin_size: 0.2               # tile side in section coordinates (~5 x 5 spots at 0.037 spacing)
+  bin_min_spots: 10
+  bin_n_neighbors: 8
+  bin_ring_neighbours: [12, 24]

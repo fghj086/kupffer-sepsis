@@ -1,0 +1,20 @@
+# Stage 03 add-on: KC vs recruited with scores independent of annotation genes (GSE290684).
+# Annotation lists and program sets are read from config/03_single_cell.yaml.
+seed: 20261124
+stage: 03_single_cell
+base_config: config/03_single_cell.yaml
+# Add-on (03_single_cell_independent.py): KC vs recruited within each GSE290684 liver with scores
+# that share no gene with any annotation list (cell_type_markers, myeloid_subsets) or with
+# programs.kc_identity. Identity genes not used for annotation: programs.kc_identity minus the
+# annotation lists (Scott et al. 2016 / Bonnardel et al. 2019 KC core: Nr1h3, Id3, Spic,
+# Slc40a1, Vcam1, Cdh5, Kcna2). C1qc is also removed from the strict clearance set because
+# its paralogues C1qa/C1qb are annotation markers.
+independent:
+  dataset: GSE290684
+  extra_exclude: [C1qc]
+  condition_sets:
+    vehicle: [CLP_vehicle]
+    TPPU: [CLP_TPPU]
+    all_12: [CLP_vehicle, CLP_TPPU]
+  shared_signature: shared_inflammatory
+  axis_signature: HMGB1_vs_LPS_axis

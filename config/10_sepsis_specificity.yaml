@@ -1,0 +1,75 @@
+# Stage 10 — is the Kupffer-cell (KC) vs recruited-macrophage difference specific to sepsis, or
+# a baseline identity difference; and how robust is the tolerance-associated component?
+#   1  sorted cells GSE311736 (CLP 8 h vs sham; KC and CD45+ non-KC): difference-in-differences
+#      (KC - CD45+ non-KC)_CLP - (KC - CD45+ non-KC)_sham, within-cell-type changes (also KC 2 h,
+#      GSE328774), CD45+ non-KC composition markers; replicate pairing checked from metadata and
+#      from shared per-replicate residual expression.
+#   2  single cell GSE279167 (pooled sham vs pooled CLP): KC - recruited gap per condition and its
+#      change, cell bootstrap (describes cell sampling only), shared-score adjustment as stage 03.
+#   3  baseline reference: only if a healthy-liver KC + monocyte-derived macrophage dataset is
+#      already in data/raw (none is; see results/10_sepsis_specificity/baseline_reference.tsv).
+#   4a held-out-gene R2 gain of each single real non-tolerance reference not in panel P1, compared
+#      with the gain of the tolerance references (stage 09 targets).
+#   4b per-mouse tolerance gain (sorted KC 2 h / 8 h and CD45+ non-KC 8 h, each CLP mouse vs the
+#      sham mean), with a gene-permutation null and sham leave-one-out contrasts as noise controls.
+seed: 20261124
+stage: 10_sepsis_specificity
+
+inputs:
+  config02: config/02_sorted_bulk.yaml
+  config03: config/03_single_cell.yaml
+  config06: config/06_attribution.yaml
+  config01: config/01_perturbation.yaml
+  config09: config/09_identifiability.yaml
+  gene_sets: results/03_single_cell/kc_vs_recruited_independent_gene_sets.tsv
+  signatures: results/01_perturbation/signatures.tsv
+  sc_myeloid: data/processed/03_GSE279167_myeloid.h5ad
+
+scores:
+  # from kc_vs_recruited_independent_gene_sets.tsv (stage 03, identical gene lists)
+  gene_sets: [clearance_strict, identity_not_annotation, inflammatory]
+  shared_signature: shared_inflammatory
+  axis_signature: HMGB1_vs_LPS_axis
+
+sorted:
+  min_count: 10            # gene kept if >= min_count reads in >= min_samples libraries (stage 02 rule)
+  min_samples: 3
+  pseudocount: 1.0         # log2(median-of-ratios normalised count + pseudocount), as stage 02
+  n_boot: 5000
+  n_perm_pairing: 5000     # Monte-Carlo permutations of replicate labels for the combined pairing test
+  pairing_min_mean_count: 50
+  composition_markers:
+    monocyte_macrophage: [Ccr2, Ly6c2, Adgre1, Csf1r, Cd68]
+    neutrophil: [Ly6g, S100a8, S100a9]
+    lymphocyte: [Cd3e, Cd79a, Nkg7]
+    kupffer_carryover: [Clec4f, Vsig4]
+
+single_cell:
+  dataset: GSE279167
+  kc_populations: ["Resident KC", "KC-like (KC-marker-intermediate)"]
+  comparators:
+    recruited_momac: ["Recruited Mo-macrophages"]
+    monocytes: ["Monocytes"]
+  n_boot: 1000
+  n_boot_cells_ols: 300
+
+baseline:
+  # candidate healthy-liver datasets with KC and monocyte-derived macrophages, checked in data/raw
+  candidates: [GSE128338, GSE128334, GSE192742, GSE156059, GSE145086]
+
+tolerance:
+  targets: [KC_CLP_2h, KC_CLP_8h, CD45nonKC_CLP_8h, sc_all_Kupffer,
+            "sc_myeloid_KC-like (KC-marker-intermediate)", "sc_myeloid_Recruited Mo-macrophages",
+            sc_all_MonoMac]
+  # all references of the stage 06 RefSet that are neither in P1 nor tolerance references
+  exclude_candidates: []
+  n_folds: 5
+  n_repeats: 20
+  pairs_universe: union
+  per_mouse:
+    min_mean_count: 20     # as stage 06 targets (baseMean >= 20)
+    n_perm: 200
+    units:
+      KC_2h: {dataset: GSE328774, cell_type: KC}
+      KC_8h: {dataset: GSE311736, cell_type: KC}
+      CD45nonKC_8h: {dataset: GSE311736, cell_type: CD45_nonKC}

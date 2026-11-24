@@ -1,0 +1,140 @@
+# Stage 07 — human relevance of the mouse findings (subjects / donors as units).
+# Mouse signatures (stage 01) and tolerance references (stage 06) are carried to human genes through
+# one-to-one MGI orthologue classes; human gene lists are taken verbatim from their sources.
+# Each dataset is processed and scored on its own; datasets are never merged into one matrix.
+seed: 20261124
+stage: 07_human
+
+human_raw: data/human/raw               # GSE252331 single-cell libraries (scripts/stages/00_download_human.sh)
+human_processed: data/human/processed   # blood-cohort matrices <cohort>_expr.tsv.gz (stage 00a)
+cohort_metadata: results/00a_blood_cohorts   # per-sample clinical tables <cohort>_samples.tsv (stage 00a)
+
+orthologs:
+  file: data/raw/07_MGI/HOM_MouseHumanSequence.rpt
+  one_to_one_only: true
+hgnc: data/raw/07_HGNC/hgnc_complete_set.txt
+
+# ---------------------------------------------------------------------------------------------
+# Signatures
+# ---------------------------------------------------------------------------------------------
+mouse_signatures: results/01_perturbation/signatures.tsv     # shared / HMGB1-biased / LPS-biased / axis
+mouse_tolerance:
+  # tolerance programmes from the stage 06 reference studies, gene-level tests rebuilt here from the
+  # stage 06 reference cache (same within-study contrasts): tolerised-then-LPS vs naive-then-LPS
+  cache_glob: data/processed/06_attribution/refset_*.pkl
+  contrasts:
+    tolerance_BMDM: {study: GSE157518, test: tolerised_LPS_4h, control: naive_LPS_4h}
+    tolerance_KC:   {study: GSE300953, test: Tol_LPS_6h, control: LPS_6h}
+  padj: 0.05
+  min_abs_lfc: 1.0
+  max_genes_per_direction: 100
+published:
+  # Pena et al. 2014 EBioMedicine, Supplementary Tables 1-2 (mmc1.pdf); defined in GSE22248 PBMC
+  pena_pdf_text: data/raw/07_Pena2014/mmc1.txt
+human_sets:
+  # Human Kupffer-cell identity markers (MacParland et al. 2018 Nat Commun; Guilliams et al. 2022 Cell)
+  kc_identity: [MARCO, CD5L, VSIG4, TIMD4, CD163]
+  # Monocyte-derived / recruited annotation markers in human liver (MacParland et al. 2018)
+  monocyte_recruited: [CCR2, VCAN, FCN1, LYZ]
+mouse_sets_to_map:
+  # stage 02 curated clearance genes and liver acute-phase genes (positive control for septic liver)
+  clearance: [Marco, Msr1, Cd5l, Vsig4, Clec4f, Timd4, Cd163, Mrc1, Cd36, Colec12,
+              Siglec1, Stab1, Fcgr1, Fcgr2b, Fcgr3, Fcgr4, Itgam, Itgb2, C1qa, C1qb,
+              C1qc, C3, C3ar1, C5ar1, Cfp, Cd93, Lyz2, Cybb, Ncf1, Nos2, Slc11a1, Mertk,
+              Axl, Gas6, Clec7a, Cd209b]
+  acute_phase: [Saa1, Saa2, Saa3, Lcn2, Orm2, Hp, Fgb, Fga, Fgg, Lbp, Serpina3n, Hamp, Apcs, Socs3]
+min_genes: 5
+# short marker sets (5 and 4 genes) are scored when at least this many of their genes are measured
+min_genes_markers: 3
+marker_sets: [kc_identity, monocyte_recruited, acute_phase]
+# datasets whose panel is too small for signature scores (only gene-level comparisons reported)
+no_signature_contrasts: [GSE78162]
+
+# scores reported for every dataset (signed sets: up genes +1, down genes -1)
+scores: [shared_inflammatory, HMGB1_biased, LPS_biased, HMGB1_vs_LPS_axis,
+         tolerance_BMDM, tolerance_KC, pena_endotoxin_tolerance, pena_inflammatory,
+         kc_identity, monocyte_recruited, clearance, clearance_no_identity, acute_phase]
+
+# ---------------------------------------------------------------------------------------------
+# Datasets
+# ---------------------------------------------------------------------------------------------
+datasets:
+  GSE141864:   {role: septic_liver, platform: data/raw/07_platforms/GPL17586_data.txt.gz,
+                matrix: data/raw/07_GSE141864/GSE141864_series_matrix.txt.gz}
+  GSE233483:   {role: liver_organoid, file: data/raw/07_GSE233483/GSE233483_Combined_processed_data_KuLOs.txt.gz}
+  GSE22248:    {role: tolerance_reference, matrix: data/raw/07_GSE22248/GSE22248_series_matrix.txt.gz}
+  GSE15219:    {role: tolerance_reference, matrix: data/raw/07_GSE15219/GSE15219_series_matrix.txt.gz}
+  GSE254271:   {role: hmgb1_reference, matrix: data/raw/07_GSE254271/GSE254271_series_matrix.txt.gz}
+  GSE162834:   {role: hmgb1_reference, file: data/raw/07_GSE162834/GSE162834_rawCounts.tsv.gz}
+  GSE78162:    {role: hmgb1_lps_matched, matrix: data/raw/07_GSE78162/GSE78162_series_matrix.txt.gz}
+  GSE46955:    {role: sepsis_monocytes, matrix: data/raw/07_GSE46955/GSE46955_series_matrix.txt.gz}
+  GSE252331:   {role: sepsis_monocytes_sc}
+  blood:       {role: sepsis_blood, cohorts: [GAINS, GAINS4421, GSE95233, GSE57065, GSE222393, MARS]}
+
+single_cell:
+  min_genes: 300
+  max_pct_mt: 15
+  leiden_resolution: 1.0
+  monocyte_markers: [CD14, LYZ, VCAN, S100A9, FCN1]
+  min_monocytes_per_donor: 50
+
+mortality:
+  # admission sample per patient; score standardised within cohort; Firth-penalised logistic per
+  # cohort, log odds ratios pooled with a REML random-effects model
+  cohorts: [GAINS, GAINS4421, GSE95233, GSE222393, MARS]
+  admission_day_max: 1
+  scores: [HMGB1_vs_LPS_axis, HMGB1_biased, LPS_biased, shared_inflammatory, tolerance_BMDM, tolerance_KC,
+           pena_endotoxin_tolerance, pena_inflammatory]
+  min_deaths: 5
+composition:
+  # canonical leukocyte markers for whole-blood composition covariates (marker scores)
+  markers:
+    neutrophil: [FCGR3B, CSF3R, CXCR2, FPR1, MME]
+    monocyte: [CD14, CSF1R, FCN1, LYZ, MS4A7]
+    lymphocyte: [CD3E, CD3D, CD2, CD247, MS4A1, CD79A, KLRD1]
+  # per-sample deconvolved proportions of septic samples (GSE60424 reference, stage 00b)
+  deconvolved: results/00b_blood_deconvolution/sample_values.tsv
+  # tolerance scores additionally adjusted for the shared inflammatory score (illness intensity)
+  tolerance_scores: [pena_endotoxin_tolerance, tolerance_BMDM, tolerance_KC, HMGB1_vs_LPS_axis]
+  sepsis_vs_control_scores: [shared_inflammatory, LPS_biased, HMGB1_biased, HMGB1_vs_LPS_axis,
+                             tolerance_BMDM, tolerance_KC, pena_endotoxin_tolerance, pena_inflammatory]
+ci_level: 0.95
+n_boot: 2000
+
+# ---------------------------------------------------------------------------------------------
+# Candidate human datasets screened (GEO E-utilities searches, Nov 2026; BioStudies search for human
+# septic liver). question: a = septic human liver; b = human macrophages/KC stimulated with LPS /
+# HMGB1 / tolerance; c = sepsis monocytes or blood. Written to results/07_human/candidates.tsv.
+# ---------------------------------------------------------------------------------------------
+candidates:
+  - [GSE141864, a, "post-mortem heart/lung/kidney/liver/spleen, meningococcal septic shock (5 patients) vs acute non-infectious death (2); HTA 2.0; liver: 4 septic FFPE + 1 control FFPE, 2 septic fresh-frozen", chosen, "only human septic-liver transcriptome with per-subject data; one control liver, so effect sizes only"]
+  - [GSE237861, a, "post-mortem cortex/hippocampus/heart/lung/kidney/colon, septic shock 7 vs non-infected critically ill 7, RNA-seq", rejected, "no liver tissue"]
+  - [GSE160016, a, "liver of donors after cardiac death, NAFLD 5 vs non-NAFLD 6", rejected, "no sepsis arm"]
+  - [GSE150316, a, "COVID-19 autopsy organs incl. liver, RNA-seq", rejected, "no control liver; viral disease"]
+  - [GSE169504, a, "COVID-19 autopsy tissues, GeoMx spatial (cancer transcriptome atlas panel)", rejected, "targeted spatial panel, no matched control liver"]
+  - [GSE171668, a, "COVID-19 autopsy single-nucleus atlas (lung, heart, liver, kidney)", rejected, "no non-infected control liver"]
+  - [GSE233483, a, "iPSC multilineage liver organoids with Kupffer-like cells: control / LPS+IFN-g / recovery days 1-3, 2 each, AmpliSeq", chosen, "human liver tissue model with Kupffer-like cells; one iPSC line, effect sizes only"]
+  - [GSE233538, a, "iPSC-derived and primary human Kupffer cells (sorted), baseline", rejected, "no stimulation; identity only"]
+  - [GSE22248, b, "PBMC, 4 donors: untreated / LPS / LPS then LPS (24 h apart), paired, Illumina", chosen, "human endotoxin-tolerance reference; source of the Pena 2014 signatures"]
+  - [GSE15219, b, "monocytes: control / LPS 3-24 h / tolerised / tolerised + LPS 3-24 h, 2 each, Illumina", chosen, "human monocyte tolerance with restimulation time course; effect sizes only"]
+  - [GSE207510, b, "GM-CSF macrophages of one donor: medium / M-triDAP / LPS 24 h then restimulation 1 h and 4 h, two experiments", rejected, "one donor; tolerance covered by GSE22248 and GSE15219 with more independent units"]
+  - [GSE85243, b, "monocytes: LPS or beta-glucan 24 h, differentiation to day 6, restimulation (Novakovic 2016)", rejected, "trained-immunity design (memory after 5 days), per-sample tar of 230 MB; tolerance question covered by direct designs"]
+  - [GSE189847, b, "monocyte-derived macrophages M0/M1/M2/endotoxin-primed, +/- Salmonella, 4 donors", rejected, "endotoxin priming without an LPS restimulation arm; response to live bacteria"]
+  - [GSE327840, b, "LPS tolerance in monocytes, THP-1, fibroblasts, smooth muscle and endothelial cells, RNA-seq", rejected, "series metadata not retrievable from the GEO mirror at screening"]
+  - [GSE254271, b, "CD14 monocytes + GM-CSF 72 h: control / HMGB1 / HMGB1+FPS-ZM1 (RAGE) / HMGB1+TAK-242 (TLR4) / S100A9..., 4 donors, Clariom S", chosen, "human HMGB1 response with receptor blockade, donors paired"]
+  - [GSE162834, b, "monocytes of one donor: control / DMOG / HMGB1 / HMGB1+DMOG, triplicate cultures, RNA-seq", chosen, "second human HMGB1 response; one donor, effect sizes only"]
+  - [GSE78162, b, "CSF1 macrophages of one donor: control / LPS / HMGB1 / nab-paclitaxel 96 h, triplicate cultures, 150-gene RT-qPCR", chosen, "only human design with LPS and HMGB1 side by side; small targeted panel, one donor, descriptive"]
+  - [GSE3037, b, "blood neutrophils of acute lung injury patients stimulated with LPS or HMGB1", rejected, "neutrophils, not monocytes/macrophages; series matrix not retrievable at screening"]
+  - [GSE61477, b, "phagocytes stimulated with MRP8/MRP14 (stress tolerance)", rejected, "S100 alarmins, not HMGB1 or LPS tolerance"]
+  - [GSE46914, b, "monocytes: endotoxin tolerance with IFN-g", rejected, "IFN-g reversal design; tolerance covered by GSE22248 and GSE15219"]
+  - [GSE46955, c, "blood monocytes, Gram-negative sepsis (acute and recovery, paired) and healthy donors, basal and ex vivo LPS 3 h, Illumina (Shalova 2015)", chosen, "patient-level monocyte state and LPS responsiveness in sepsis"]
+  - [GSE63311, c, "whole blood at emergency presentation, suspected sepsis (Pena 2014), RNA-seq", rejected, "signature-defining study; blood cohorts with outcome and time course used instead"]
+  - [Pena2014_suppl, c, "Pena et al. 2014 EBioMedicine Supplementary Tables 1-2: endotoxin-tolerance (99 genes) and inflammatory signatures from GSE22248", chosen, "published human endotoxin-tolerance signature, gene list verified from the supplement (mmc1.pdf md5 19f27445e15769e52377d5bf09cb59d0)"]
+  - [GSE252331, c, "PBMC single-cell RNA-seq: healthy 7, sepsis day 4 (4), day 14 rapid recovery (4) or chronic critical illness (2)", chosen, "blood CD14 monocytes summed per donor"]
+  - [E-MTAB-5273, c, "GAinS leukocytes, community-acquired pneumonia / faecal peritonitis, days 1/3/5, 28-day outcome, healthy controls", chosen, "time course and mortality"]
+  - [E-MTAB-4421, c, "GAinS leukocytes, community-acquired pneumonia, 28-day outcome", chosen, "mortality; patients also in E-MTAB-5273 removed"]
+  - [GSE95233, c, "septic shock whole blood day 1 and day 2-3, 28-day outcome, healthy controls", chosen, "time course, control comparison and mortality"]
+  - [GSE57065, c, "septic shock whole blood 0 / 24 / 48 h, healthy controls", chosen, "time course and control comparison (no outcome)"]
+  - [GSE222393, c, "sepsis whole blood admission and later days, 28-day outcome", chosen, "time course and mortality"]
+  - [GSE65682, c, "MARS ICU sepsis whole blood, 28-day outcome", chosen, "mortality"]
+  - [GSE54514, c, "sepsis whole blood, survivors and non-survivors, daily samples", rejected, "series-matrix expression columns do not match the sample labels"]
